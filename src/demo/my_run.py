@@ -21,7 +21,7 @@ os.makedirs(LOGS_DIR, exist_ok=True)
 POLYVORE_PRECOMPUTED_REC_EMBEDDING_DIR = "{polyvore_dir}/precomputed_rec_embeddings"
 
 ITEM_PER_PAGE = 12
-ITEM_PER_SEARCH = 8
+ITEM_PER_SEARCH = 16
 
 POLYVORE_CATEGORIES = [
     'all-body', 'bottoms', 'tops', 'outerwear', 'bags', 
@@ -288,7 +288,11 @@ def run(args):
                 outfit=state_my_items,
                 category='Unknown'
             )
-            e = complementary_model.embed_query(  # 使用互补物品搜索模型
+            # e = complementary_model.embed_query(  # 使用互补物品搜索模型
+            #     query=[query],
+            #     use_precomputed_embedding=False
+            # ).detach().cpu().numpy().tolist()
+            e = compatibility_model.embed_query(  # 使用互补物品搜索模型
                 query=[query],
                 use_precomputed_embedding=False
             ).detach().cpu().numpy().tolist()

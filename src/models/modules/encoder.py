@@ -90,5 +90,6 @@ class CLIPItemEncoder(ItemEncoder):
             model_name_or_path=model_name
         )
         self.text_enc = CLIPTextEncoder(
+        # self.text_enc = HuggingFaceTextEncoder(
             model_name_or_path=model_name
         )

@@ -62,7 +62,8 @@ class OutfitTransformer(nn.Module):
             dropout=self.cfg.transformer_dropout,
             batch_first=True,
             norm_first=True,
-            activation=F.mish,
+            # activation=F.mish,
+            activation='relu'
         )
         self.style_enc = nn.TransformerEncoder(
             encoder_layer=style_enc_layer,

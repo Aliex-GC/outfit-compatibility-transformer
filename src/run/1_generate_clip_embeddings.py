@@ -14,7 +14,7 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
-from torch.amp import GradScaler, autocast
+
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 from tqdm import tqdm
@@ -33,7 +33,7 @@ LOGS_DIR = SRC_DIR / 'logs'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.makedirs(LOGS_DIR, exist_ok=True)
 
-POLYVORE_PRECOMPUTED_CLIP_EMBEDDING_DIR = "{polyvore_dir}/precomputed_clip_embeddings"
+POLYVORE_PRECOMPUTED_CLIP_EMBEDDING_DIR = "{polyvore_dir}/precomputed_text_clip_embeddings"
 
 
 def parse_args():
@@ -45,7 +45,7 @@ def parse_args():
     parser.add_argument('--polyvore_type', type=str, choices=['nondisjoint', 'disjoint'],
                         default='nondisjoint')
     parser.add_argument('--batch_sz_per_gpu', type=int,
-                        default=128)
+                        default=1024)
     parser.add_argument('--n_workers_per_gpu', type=int,
                         default=4)
     parser.add_argument('--checkpoint', type=str, 
@@ -97,18 +97,17 @@ def compute(rank: int, world_size: int, args: Any):
     all_ids, all_embeddings = [], []
     with torch.no_grad():
         for batch in tqdm(item_dataloader):
-            if args.demo and len(all_embeddings) > 10:
-                break
+            # if args.demo and len(all_embeddings) > 10:
+            #     break
             
-            if dist.get_world_size() > 1:
-                embeddings = model.module.precompute_clip_embedding(batch)  # (batch_size, d_embed)
-            else:
-                embeddings = model.precompute_clip_embedding(batch)
-            
+            # if dist.get_world_size() > 1:
+            #     embeddings = model.module.precompute_clip_embedding(batch)  # (batch_size, d_embed)
+            # else:
+            embeddings = model.precompute_clip_embedding(batch)
             all_ids.extend([item.item_id for item in batch])
             all_embeddings.append(embeddings)
-            
     all_embeddings = np.concatenate(all_embeddings, axis=0)
+    print(len(all_embeddings))
     logger.info(f"Computed {len(all_embeddings)} embeddings")
 
     # numpy 어레이 저장

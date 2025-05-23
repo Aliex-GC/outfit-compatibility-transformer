@@ -47,7 +47,7 @@ class FashionComplementaryQuery(BaseModel):
         description="List of fashion items"
     )
     category: str = Field(
-        default="",
+        default="shoes",
         description="Category of the target outfit"
     )
     

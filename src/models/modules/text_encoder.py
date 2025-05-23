@@ -63,8 +63,9 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
     
     def __init__(
         self,
-        d_embed: int = 64,
+        d_embed: int = 128,
         model_name_or_path: str = "sentence-transformers/all-MiniLM-L6-v2",
+        # model_name_or_path: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
         freeze: bool = True
     ):
         super().__init__()
@@ -73,9 +74,12 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
             freeze_model(self.model)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         self.proj = nn.Linear(
-            in_features=self.model.config.hidden_size, 
+            in_features=384, 
+            
             out_features=d_embed
         )
+        self.model.to(self.device)
+        self.proj.to(self.device)
         
     @property
     def d_embed(self) -> int:
@@ -99,7 +103,7 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
         tokenizer_kargs['return_tensors'] = 'pt'
         
         inputs = self.tokenizer(
-            texts, **self.tokenizer_args
+            texts, **tokenizer_kargs
         )
         inputs = {
             key: value.to(self.device) for key, value in inputs.items()

@@ -13,7 +13,7 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
-from torch.amp import GradScaler, autocast
+# from torch.amp import GradScaler, autocast
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 from tqdm import tqdm
@@ -53,7 +53,7 @@ def parse_args():
     parser.add_argument('--n_workers_per_gpu', type=int,
                         default=4)
     parser.add_argument('--n_epochs', type=int,
-                        default=200)
+                        default=100)
     parser.add_argument('--lr', type=float,
                         default=2e-5)
     parser.add_argument('--accumulation_steps', type=int,
@@ -220,7 +220,6 @@ def valid_step(
 
     return {f'valid_{key}': value for key, value in output.items()}
 
-
 def train(
     rank: int, world_size: int, args: Any,
     wandb_run: Optional[wandb.sdk.wandb_run.Run] = None
@@ -255,6 +254,10 @@ def train(
     logger.info(f'Optimizer and Scheduler Setup Completed')
 
     # Training Loop
+    best_score = -float('inf')  # Track best validation accuracy
+    checkpoint_dir = CHECKPOINT_DIR / project_name
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    
     for epoch in range(args.n_epochs):
         if world_size > 1:
             train_dataloader.sampler.set_epoch(epoch)
@@ -270,29 +273,114 @@ def train(
             model, loss_fn, valid_dataloader
         )
         
-        checkpoint_dir = CHECKPOINT_DIR / project_name
-        os.makedirs(checkpoint_dir, exist_ok=True)
-        checkpoint_path = os.path.join(checkpoint_dir, f'epoch_{epoch+1}.pth')
-            
+        # Only save if current validation accuracy is better than best
+        current_score = valid_logs.get('valid_accuracy', -float('inf'))
+        
         if rank == 0:
-            torch.save({
-                'config': model.module.cfg.__dict__ if world_size > 1 else model.cfg.__dict__,
-                'model': model.state_dict()
-            }, checkpoint_path)
-            
+            # Always save score file for record
             score_path = os.path.join(checkpoint_dir, f'epoch_{epoch+1}_score.json')
             with open(score_path, 'w') as f:
                 score = {**train_logs, **valid_logs}
                 json.dump(score, f, indent=4)
-            logger.info(f'Checkpoint saved at {checkpoint_path}')
+            
+            # Only save model checkpoint if it's the best so far
+            if current_score > best_score:
+                best_score = current_score
+                best_checkpoint_path = os.path.join(checkpoint_dir, 'best_model.pth')
+                torch.save({
+                    'config': model.module.cfg.__dict__ if world_size > 1 else model.cfg.__dict__,
+                    'model': model.state_dict(),
+                    'epoch': epoch + 1,
+                    'score': best_score
+                }, best_checkpoint_path)
+                logger.info(f'New best model saved at {best_checkpoint_path} with accuracy {best_score:.4f}')
+            
+            logger.info(f'Epoch {epoch+1} completed. Current accuracy: {current_score:.4f}, Best accuracy: {best_score:.4f}')
             
         dist.barrier()
-        map_location = f'cuda:{rank}' if torch.cuda.is_available() else 'cpu'
-        state_dict = torch.load(checkpoint_path, map_location=map_location, weights_only=False)
-        model.load_state_dict(state_dict['model'])
-        logger.info(f'Checkpoint loaded from {checkpoint_path}')
         
+    # At the end of training, load the best model for final evaluation
+    if rank == 0 and best_score > -float('inf'):
+        best_checkpoint_path = os.path.join(checkpoint_dir, 'best_model.pth')
+        map_location = f'cuda:{rank}' if torch.cuda.is_available() else 'cpu'
+        state_dict = torch.load(best_checkpoint_path, map_location=map_location, weights_only=False)
+        model.load_state_dict(state_dict['model'])
+        logger.info(f'Loaded best model from epoch {state_dict["epoch"]} with accuracy {state_dict["score"]:.4f}')
+    
     cleanup()
+# def train(
+#     rank: int, world_size: int, args: Any,
+#     wandb_run: Optional[wandb.sdk.wandb_run.Run] = None
+# ):  
+#     # Setup
+#     setup(rank, world_size)
+    
+#     # Logging Setup
+#     project_name = f'compatibility_{args.model_type}_' + (
+#         args.project_name if args.project_name 
+#         else (wandb_run.name if wandb_run else 'test')
+#     )
+#     logger = get_logger(project_name, LOGS_DIR, rank)
+#     logger.info(f'Logger Setup Completed')
+    
+#     # Dataloaders
+#     train_dataloader, valid_dataloader = setup_dataloaders(rank, world_size, args)
+#     logger.info(f'Dataloaders Setup Completed')
+    
+#     # Model setting
+#     model = load_model(model_type=args.model_type, checkpoint=args.checkpoint)
+#     logger.info(f'Model Loaded and Wrapped with DDP')
+    
+#     # Optimizer, Scheduler, Loss Function
+#     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+#     scheduler = torch.optim.lr_scheduler.OneCycleLR(
+#         optimizer,
+#         max_lr=args.lr, epochs=args.n_epochs, steps_per_epoch=int(len(train_dataloader) / args.accumulation_steps),
+#         pct_start=0.3, anneal_strategy='cos', div_factor=25, final_div_factor=1e4
+#     )
+#     loss_fn = FocalLoss(alpha=0.5, gamma=2) # focal_loss(alpha=0.5, gamma=2)
+#     logger.info(f'Optimizer and Scheduler Setup Completed')
+
+#     # Training Loop
+    
+#     for epoch in range(args.n_epochs):
+#         if world_size > 1:
+#             train_dataloader.sampler.set_epoch(epoch)
+#         train_logs = train_step(
+#             rank, world_size, 
+#             args, epoch, logger, wandb_run,
+#             model, optimizer, scheduler, loss_fn, train_dataloader
+#         )
+        
+#         valid_logs = valid_step(
+#             rank, world_size, 
+#             args, epoch, logger, wandb_run,
+#             model, loss_fn, valid_dataloader
+#         )
+        
+#         checkpoint_dir = CHECKPOINT_DIR / project_name
+#         os.makedirs(checkpoint_dir, exist_ok=True)
+#         checkpoint_path = os.path.join(checkpoint_dir, f'epoch_{epoch+1}.pth')
+            
+#         if rank == 0:
+#             torch.save({
+#                 'config': model.module.cfg.__dict__ if world_size > 1 else model.cfg.__dict__,
+#                 'model': model.state_dict()
+#             }, checkpoint_path)
+            
+#             score_path = os.path.join(checkpoint_dir, f'epoch_{epoch+1}_score.json')
+#             with open(score_path, 'w') as f:
+#                 score = {**train_logs, **valid_logs}
+#                 json.dump(score, f, indent=4)
+#             logger.info(f'Checkpoint saved at {checkpoint_path}')
+            
+#         dist.barrier()
+#         map_location = f'cuda:{rank}' if torch.cuda.is_available() else 'cpu'
+#         state_dict = torch.load(checkpoint_path, map_location=map_location, weights_only=False)
+#         model.load_state_dict(state_dict['model'])
+#         logger.info(f'Checkpoint loaded from {checkpoint_path}')
+        
+#     cleanup()
 
 
 if __name__ == '__main__':
@@ -311,3 +399,5 @@ if __name__ == '__main__':
         train, args=(args.world_size, args, wandb_run), 
         nprocs=args.world_size, join=True
     )
+
+# python -m src.run.2_train_compatibility --wandb_key 3ba2eadd20f6211ecb6dea157276cddaff1cbfa9
