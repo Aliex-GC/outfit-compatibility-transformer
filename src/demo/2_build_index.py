@@ -34,7 +34,7 @@ LOGS_DIR = SRC_DIR / 'logs'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.makedirs(LOGS_DIR, exist_ok=True)
 
-POLYVORE_PRECOMPUTED_REC_EMBEDDING_DIR = "{polyvore_dir}/precomputed_rec_embeddings"
+POLYVORE_PRECOMPUTED_REC_EMBEDDING_DIR = "{polyvore_dir}/precomputed_text_clip_embeddings"
 
 
 def parse_args():
@@ -50,26 +50,30 @@ def load_rec_embedding_dict(dataset_dir):
     filenames = [filename for filename in os.listdir(e_dir) if filename.endswith(".pkl")]
     filenames = sorted(filenames, key=lambda x: int(x.split('.')[0].split('_')[-1]))
     
+    print(f"Found {len(filenames)} .pkl files in {e_dir}")  # Debug: 检查文件数量
+    print(f"Sample filenames: {filenames[:5]}")  # Debug: 检查文件名是否正确排序
+    
     all_ids, all_embeddings = [], []
     for filename in filenames:
         filepath = os.path.join(e_dir, filename)
         with open(filepath, 'rb') as f:
             data = pickle.load(f)
+            print(f"Loaded {len(data['ids'])} IDs and {data['embeddings'].shape} embeddings from {filename}")  # Debug
             all_ids += data['ids']
             all_embeddings.append(data['embeddings'])
             
     all_embeddings = np.concatenate(all_embeddings, axis=0)
-    print(f"Loaded {len(all_embeddings)} embeddings")
+    print(f"Final embeddings shape: {all_embeddings.shape}")  # Debug: 检查最终维度
     
     all_embeddings_dict = {item_id: embedding for item_id, embedding in zip(all_ids, all_embeddings)}
-    print(f"Created embeddings dictionary")
+    print(f"Created embeddings dictionary with {len(all_embeddings_dict)} items")  # Debug
     
     return all_embeddings_dict
 
 
 def main(args):
     indexer = vectorstore.FAISSVectorStore(
-        index_name='rec_index',
+        index_name='my_rec_index',
         d_embed=128,
         faiss_type='IndexFlatIP',
         base_dir=POLYVORE_PRECOMPUTED_REC_EMBEDDING_DIR.format(polyvore_dir=args.polyvore_dir),
@@ -83,6 +87,26 @@ def main(args):
     
     indexer.save()
     
+    #加载所有分片嵌入
+    # all_embeddings = []
+    # all_ids = []
+    # e_dir = POLYVORE_PRECOMPUTED_REC_EMBEDDING_DIR.format(polyvore_dir=args.polyvore_dir)
+    
+    # for filename in os.listdir(e_dir):
+    #     if filename.endswith(".pkl"):
+    #         with open(os.path.join(e_dir, filename), 'rb') as f:
+    #             data = pickle.load(f)
+    #             all_ids.extend(data['ids'])
+    #             all_embeddings.append(data['embeddings'])
+    
+    # # 合并嵌入
+    # all_embeddings = np.concatenate(all_embeddings, axis=0)
+    
+    # # 添加到索引
+    # indexer.add(all_embeddings, all_ids)
+    # indexer.save()
+    
+    # print(f"Final index size: {indexer.index.ntotal}")
 
 if __name__ == "__main__":
     args = parse_args()

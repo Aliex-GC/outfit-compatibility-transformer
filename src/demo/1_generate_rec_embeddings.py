@@ -33,7 +33,7 @@ LOGS_DIR = SRC_DIR / 'logs'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.makedirs(LOGS_DIR, exist_ok=True)
 
-POLYVORE_PRECOMPUTED_REC_EMBEDDING_DIR = "{polyvore_dir}/precomputed_rec_embeddings"
+POLYVORE_PRECOMPUTED_REC_EMBEDDING_DIR = "{polyvore_dir}/precomputed_my_rec_embeddings"
 
 
 def parse_args():

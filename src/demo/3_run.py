@@ -25,7 +25,6 @@ ITEM_PER_SEARCH = 8
 
 POLYVORE_CATEGORIES = [
     'all-body', 'bottoms', 'tops', 'outerwear', 'bags', 
-    
     'shoes', 'accessories', 'scarves', 'hats', 
     'sunglasses', 'jewellery', 'unknown'
 ]

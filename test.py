@@ -71,7 +71,7 @@ if __name__ == "__main__":
             with open(file_path, "rb") as img_file:
                 return base64.b64encode(img_file.read()).decode('utf-8')
 
-    client = Client("http://127.0.0.1:7860/")
+    client = Client("http://127.0.0.1:5000")
     from PIL import Image
 
     # 读取图像文件
@@ -91,29 +91,29 @@ if __name__ == "__main__":
                     )
                 )
     
-    state_my_items.append(
-                    datatypes.FashionItem(
-                            id=None,
-                            image=image2, 
-                            description="peacock feather appliques backpack",
-                            category="bags",
-                            )
-                        )
-    items = [
-        {
-            "image": image_path1,
-            "description": "Tie front rayon shirt",
-            "category": "tops"
-        },
-        {
-            "image": image_path2,
-            "description": "peacock feather appliques backpack",
-            "category": "bags"
-        }
-    ]
+    # state_my_items.append(
+    #                 datatypes.FashionItem(
+    #                         id=None,
+    #                         image=image2, 
+    #                         description="peacock feather appliques backpack",
+    #                         category="bags",
+    #                         )
+    #                     )
+    # items = [
+    #     {
+    #         "image": image_path1,
+    #         "description": "Tie front rayon shirt",
+    #         "category": "tops"
+    #     },
+    #     {
+    #         "image": image_path2,
+    #         "description": "peacock feather appliques backpack",
+    #         "category": "bags"
+    #     }
+    # ]
     result = client.predict( 
         # 使用示例（替换为你的图片路径）
         state_my_items=state_my_items,
-        api_name="/compute_score"
+        api_name="/search"
     )
     print(result)
